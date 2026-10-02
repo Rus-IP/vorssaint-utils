@@ -40,7 +40,10 @@ final class NotchQuickAccessMotion: ObservableObject {
         self.visible = visible
         generation += 1
         let token = generation
-        interactive = false
+        // A non-animated reveal has no animation completion to wait for.
+        // Sonoma can also omit a completion when a newly attached hosting
+        // view never committed the preceding frame; it must not strand input.
+        interactive = visible && !animated
         let animation: Animation? = animated
             ? (visible ? .spring(duration: 0.38, bounce: 0.12).delay(delay) : .easeIn(duration: NotchQuickAccessLayout.withdrawalDuration))
             : nil
@@ -49,6 +52,12 @@ final class NotchQuickAccessMotion: ObservableObject {
         } completion: { [weak self] in
             guard let self, self.generation == token else { return }
             self.interactive = visible
+        }
+        if visible && animated {
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay) + 0.55) { [weak self] in
+                guard let self, self.generation == token, self.visible else { return }
+                self.interactive = true
+            }
         }
     }
 
@@ -100,6 +109,8 @@ struct NotchQuickAccessView: View {
             }
         }
         .environment(\.colorScheme, .dark)
+        .environment(\.accessibilityReduceMotion,
+                     AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         .environment(\.notchPresentation, true)
         .foregroundStyle(.white)
         .tint(.white)

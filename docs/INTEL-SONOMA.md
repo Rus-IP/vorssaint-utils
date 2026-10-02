@@ -44,5 +44,11 @@ For a controlled local comparison only, `BARKIT_FULL_MOTION=1` restores decorati
 `BARKIT_PERFORMANCE_REPORT=/absolute/path.json` runs a 90-second local scenario: idle, menu
 open/close, island open/close, idle. The report records the actual presentation state and
 SystemMonitor temperatures, so CPU measurements can be matched to surfaces that really opened.
+The scenario also delivers two local clicks to the production Explore side button and records
+its handler count and the resulting section-page state. These events stay inside the app.
 The scenario stops its timer and closes its own surfaces when finished. Normal launches install
 no performance timer and perform none of these diagnostic actions.
+
+Floating shortcuts accept the first click in an inactive island window. A non-animated reveal
+enables input immediately; animated reveals also have a generation-checked completion deadline
+so a missing SwiftUI completion cannot leave visible shortcuts permanently disabled.

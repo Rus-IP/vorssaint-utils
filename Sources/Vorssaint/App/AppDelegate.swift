@@ -403,6 +403,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         DispatchQueue.main.asyncAfter(deadline: .now() + 45) {
             notch.open(pinned: true, takeFocus: false)
         }
+        // The explore button changes only the island's own page, then back.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 55) { _ = notch.intelClickExploreButton() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 59) { _ = notch.intelClickExploreButton() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 70) {
             notch.collapse()
             notch.pinned = originalPinned
@@ -416,6 +419,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
                 "popoverShown": self.popover.isShown,
                 "notchExpanded": notch.expanded,
                 "notchModule": notch.selected.rawValue,
+                "showingSections": notch.showingSections,
+                "quickAccess": notch.intelQuickAccessDiagnostics,
+                "quickActionCount": notch.intelQuickActionCount,
+                "lastQuickAction": notch.intelLastQuickAction,
                 "lowMotion": AppInfo.usesIntelLowMotion,
                 "cpuCelsius": snapshot.cpuTemperature.map { $0 as Any } ?? NSNull(),
                 "gpuCelsius": snapshot.gpuTemperature.map { $0 as Any } ?? NSNull()

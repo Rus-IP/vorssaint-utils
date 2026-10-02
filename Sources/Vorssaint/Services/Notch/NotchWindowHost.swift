@@ -450,6 +450,38 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
         quickAccessContainer?.hoverChanged = handler
     }
 
+    #if VORSSAINT_INTEL
+    var intelQuickAccessDiagnostics: [String: Any] {
+        guard let container = quickAccessContainer else { return [:] }
+        let hits = container.motion.placements.map { placement -> Bool in
+            let point = container.quickView.convert(placement.center(progress: 1), to: nil)
+            guard let hit = panel.contentView?.hitTest(point) else { return false }
+            return hit === container.quickView || hit.isDescendant(of: container.quickView)
+        }
+        return ["interactive": container.motion.interactive,
+                "buttonCount": hits.count, "buttonHits": hits,
+                "acceptsFirstMouse": container.quickView.acceptsFirstMouse(for: nil)]
+    }
+
+    /// Exercise one harmless, reversible production button inside this app.
+    /// Events are delivered only to our own panel, never to the OS event tap.
+    func intelClickExploreButton() -> Bool {
+        guard let container = quickAccessContainer, container.motion.interactive,
+              let placement = container.motion.placements.first(where: { $0.button.action == .explore }) else { return false }
+        let point = container.quickView.convert(placement.center(progress: 1), to: nil)
+        let timestamp = ProcessInfo.processInfo.systemUptime
+        guard let down = NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
+                    timestamp: timestamp, windowNumber: panel.windowNumber, context: nil,
+                    eventNumber: 1001, clickCount: 1, pressure: 1),
+              let up = NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
+                    timestamp: timestamp + 0.01, windowNumber: panel.windowNumber, context: nil,
+                    eventNumber: 1002, clickCount: 1, pressure: 0) else { return false }
+        NSApp.postEvent(up, atStart: true)
+        panel.sendEvent(down)
+        return true
+    }
+    #endif
+
     func containsHover(_ screenPoint: CGPoint) -> Bool {
         guard isPresented, !concealedForMissionControl else { return false }
         // Hover follows the destination bounds, not a transient mask edge.
@@ -880,7 +912,7 @@ private final class NotchQuickAccessContainer: NSView {
         self.canvas = canvas
         let motion = NotchQuickAccessMotion()
         self.motion = motion
-        quickView = NSHostingView(rootView: content(motion, canvas.backdropPresentation))
+        quickView = NotchHostingView(rootView: content(motion, canvas.backdropPresentation))
         quickView.sizingOptions = []
         quickView.wantsLayer = true
         quickView.isHidden = true

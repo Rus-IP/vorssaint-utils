@@ -110,6 +110,12 @@ final class NotchService: ObservableObject {
     @Published private var musicDetailVisible = false
 
     private var windowHost: NotchWindowHost?
+    #if VORSSAINT_INTEL
+    private(set) var intelQuickActionCount = 0
+    private(set) var intelLastQuickAction = ""
+    var intelQuickAccessDiagnostics: [String: Any] { windowHost?.intelQuickAccessDiagnostics ?? [:] }
+    func intelClickExploreButton() -> Bool { windowHost?.intelClickExploreButton() ?? false }
+    #endif
     private var panel: NotchPanel? { windowHost?.panel }
     private var captureControlsCancel: (() -> Void)?
     private var captureControlsSubscription: AnyCancellable?
@@ -1404,6 +1410,12 @@ final class NotchService: ObservableObject {
 
     func activateQuickAction(_ action: NotchQuickAction) {
         guard NotchSupport.isEnabled(), action.isAvailable() else { return }
+        #if VORSSAINT_INTEL
+        if ProcessInfo.processInfo.environment["BARKIT_PERFORMANCE_REPORT"] != nil {
+            intelQuickActionCount += 1
+            intelLastQuickAction = action.id
+        }
+        #endif
         switch action {
         case .explore: toggleSections()
         case .settings: openSettings()
