@@ -52,6 +52,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         #if VORSSAINT_INTEL
         // Optional local startup evidence for unsupported Intel/OCLP machines.
         // The report stays on disk and records no clipboard, files or app inventory.
+        if let sensorPath = ProcessInfo.processInfo.environment["BARKIT_SENSOR_REPORT"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self else { return }
+                let monitor = SystemMonitor.shared
+                monitor.$snapshot.sink { snapshot in
+                    guard snapshot.cpuTemperature != nil || snapshot.gpuTemperature != nil else { return }
+                    let report: [String: Any] = [
+                        "cpuCelsius": snapshot.cpuTemperature.map { $0 as Any } ?? NSNull(),
+                        "gpuCelsius": snapshot.gpuTemperature.map { $0 as Any } ?? NSNull(),
+                        "batteryCelsius": snapshot.batteryTemperature.map { $0 as Any } ?? NSNull(),
+                        "sampledAt": Date().timeIntervalSince1970,
+                        "pid": ProcessInfo.processInfo.processIdentifier,
+                        "commit": AppInfo.buildCommit ?? "unknown"
+                    ]
+                    if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+                        try? data.write(to: URL(fileURLWithPath: sensorPath), options: .atomic)
+                    }
+                }.store(in: &self.cancellables)
+                // Exercise the same sampler that publishes the menu panel's metrics.
+                // Release this diagnostic consumer after a short local validation.
+                monitor.setNotchDetailNeeds(.init(cpuTemperature: true, gpuTemperature: true, batteryTemperature: true))
+                DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+                    monitor.setNotchDetailNeeds(.init())
+                }
+            }
+        }
         if let reportPath = ProcessInfo.processInfo.environment["BARKIT_LAUNCH_REPORT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
                 guard let self else { return }

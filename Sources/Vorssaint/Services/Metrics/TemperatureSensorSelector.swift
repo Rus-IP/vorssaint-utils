@@ -5,6 +5,7 @@ import Darwin
 import Foundation
 
 enum CPUTemperaturePlatform: Equatable {
+    case intel
     case appleM1Family
     case appleM2Family
     case appleM3Family
@@ -60,6 +61,7 @@ enum TemperatureSensorSelector {
         let brand = brandString?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         // Preserve the established Tp/Te reading path for this supported chip
         // until a verified per-core map is available.
+        if brand.contains("Intel") { return .intel }
         if brand == "Apple A18 Pro" { return .generic }
         switch appleSiliconGeneration(in: brand) {
         case 1: return .appleM1Family
@@ -85,12 +87,20 @@ enum TemperatureSensorSelector {
 
     static func displayedCPUTemperature(readings: [(key: String, value: Double)],
                                         platform: CPUTemperaturePlatform) -> Double? {
-        let valid = readings.filter { isPlausibleTemperature($0.value) }
+        let valid = readings.filter {
+            isPlausibleTemperature($0.value)
+                && (platform != .intel || isCPUTemperatureKey($0.key, platform: platform))
+        }
         guard !valid.isEmpty else { return nil }
 
         let core = valid.filter { isCPUCoreKey($0.key, platform: platform) }
         if let value = core.map({ $0.value }).max() {
             return value
+        }
+        if platform == .intel {
+            // Prefer the CPU die/package to proximity or filtered auxiliary sensors.
+            let die = valid.filter { $0.key == "TC0D" || $0.key == "TCAD" }
+            if let value = die.map({ $0.value }).max() { return value }
         }
         // Not every Mac carries the sensors its chip generation is mapped to.
         // One that does not showed the hottest reading of its CPU families
@@ -103,7 +113,7 @@ enum TemperatureSensorSelector {
 
     static func hasCPUCoreSet(platform: CPUTemperaturePlatform) -> Bool {
         switch platform {
-        case .appleM1Family, .appleM2Family, .appleM3Family, .appleM4Family, .appleM5Family:
+        case .intel, .appleM1Family, .appleM2Family, .appleM3Family, .appleM4Family, .appleM5Family:
             return true
         case .unmappedAppleSilicon, .generic: return false
         }
@@ -111,6 +121,8 @@ enum TemperatureSensorSelector {
 
     static func isCPUCoreKey(_ key: String, platform: CPUTemperaturePlatform) -> Bool {
         switch platform {
+        case .intel:
+            return key.range(of: "^TC[0-9A-Fa-f][Cc]$", options: .regularExpression) != nil
         case .appleM1Family:
             return appleM1CPUCoreKeys.contains(key)
         case .appleM2Family:
@@ -128,8 +140,19 @@ enum TemperatureSensorSelector {
 
     static func isCPUTemperatureKey(_ key: String,
                                     platform: CPUTemperaturePlatform) -> Bool {
+        if platform == .intel {
+            // TCGC is the integrated GPU, not a CPU core. Keep unrelated TC keys out.
+            return key == "TCAD"
+                || key.range(of: "^TC[0-9A-Fa-f][CcDdEeFfHhPp]$", options: .regularExpression) != nil
+        }
         if key.hasPrefix("Tp") || key.hasPrefix("Te") { return true }
         return platform == .appleM3Family && key.hasPrefix("Tf")
+    }
+
+    static func isGPUTemperatureKey(_ key: String,
+                                    platform: CPUTemperaturePlatform) -> Bool {
+        if platform == .intel { return key == "TCGC" || key.hasPrefix("TG") }
+        return key.hasPrefix("Tg")
     }
 
     static func stabilizedTemperature(_ reading: Double?,

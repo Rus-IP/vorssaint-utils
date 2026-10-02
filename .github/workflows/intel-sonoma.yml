@@ -27,6 +27,11 @@ jobs:
           test "$(uname -m)" = x86_64
           swiftc --version
           xcrun --show-sdk-version
+      - name: Intel temperature regression tests
+        run: |
+          mkdir -p build
+          swiftc -target x86_64-apple-macosx14.0 Sources/Vorssaint/Services/Metrics/TemperatureSensorSelector.swift Tools/IntelTemperatureTests.swift -o build/intel-temperature-tests
+          ./build/intel-temperature-tests
       - name: Compile Intel app for macOS 14
         run: ./build.sh --intel
       - name: Verify bundle and package

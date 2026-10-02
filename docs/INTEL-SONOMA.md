@@ -20,3 +20,15 @@ For local startup evidence, set `BARKIT_LAUNCH_REPORT` to an absolute JSON file 
 launching the app executable. After 10 seconds the app records its own menu bar item and window
 state, version, source commit and PID. The report is local and contains no clipboard or user-file
 contents. Run the bundled executable with `--selftest` for the upstream health check.
+
+## Intel temperature telemetry
+
+Intel CPU cores use `TC0C`, `TC1C`, etc.; CPU die/package readings (`TC0D`/`TCAD`) are a fallback.
+The CPU display uses the hottest valid core, consistent with upstream's core policy, rather than
+mixing in proximity, filtered, battery or GPU temperatures. Integrated Intel graphics uses `TCGC`;
+discrete GPU sensors use `TG*`. If no real GPU sensor answers, its value remains unavailable.
+The sensor key families are documented in https://github.com/exelban/stats/blob/master/Modules/Sensors/values.swift
+and were verified locally on MacBookPro8,1 using the read-only iSMC diagnostic.
+
+`BARKIT_SENSOR_REPORT=/absolute/path.json` requests a brief local diagnostic consumer and saves the
+actual SystemMonitor snapshot used by the panel. That extra consumer is released after 15 seconds.
