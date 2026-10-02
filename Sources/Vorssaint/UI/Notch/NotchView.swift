@@ -39,6 +39,8 @@ struct NotchView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .environment(\.colorScheme, .dark)
+            .environment(\.accessibilityReduceMotion,
+                         AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
             .environment(\.notchPresentation, true)
             .environment(\.notchGlassSurface, usesGlassSurface)
             .tint(.white)

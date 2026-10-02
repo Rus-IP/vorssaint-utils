@@ -32,3 +32,17 @@ and were verified locally on MacBookPro8,1 using the read-only iSMC diagnostic.
 
 `BARKIT_SENSOR_REPORT=/absolute/path.json` requests a brief local diagnostic consumer and saves the
 actual SystemMonitor snapshot used by the panel. That extra consumer is released after 15 seconds.
+
+## Intel rendering cost
+
+The Intel build keeps AI counters and live activity enabled, but uses static agent marks and
+reduced-motion island/menu transitions. OCLP's legacy graphics compositor can otherwise keep
+redrawing decorative layers while the app itself is mostly asleep. This is an app-local policy;
+it does not change macOS accessibility settings or disable monitoring features.
+
+For a controlled local comparison only, `BARKIT_FULL_MOTION=1` restores decorative motion.
+`BARKIT_PERFORMANCE_REPORT=/absolute/path.json` runs a 90-second local scenario: idle, menu
+open/close, island open/close, idle. The report records the actual presentation state and
+SystemMonitor temperatures, so CPU measurements can be matched to surfaces that really opened.
+The scenario stops its timer and closes its own surfaces when finished. Normal launches install
+no performance timer and perform none of these diagnostic actions.

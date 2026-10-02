@@ -322,7 +322,7 @@ final class NotchService: ObservableObject {
     /// the surface, the highlight sliding and the strip changing in place,
     /// instead of the whole content fading through the host.
     private func switchCompactSelection(_ change: () -> Void) {
-        let animation: Animation? = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let animation: Animation? = (AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
             ? nil : .smooth(duration: 0.26)
         withAnimation(animation) {
             objectWillChange.send()
@@ -1109,7 +1109,7 @@ final class NotchService: ObservableObject {
         hoverState.update(pointerInside: inside)
         let emphasize = inside && !hiddenInFullscreen && !hiddenUntilHover && !expanded && !peeking && !dragPlaceholder
             && notice == nil && captureControls == nil
-            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            && !(AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         if hoverEmphasized != emphasize || showedPicker != showsCompactActivityPicker {
             hoverEmphasized = emphasize
             refreshPresentation()
@@ -2051,13 +2051,13 @@ final class NotchService: ObservableObject {
             && notice == nil && !dragPlaceholder && captureControls == nil
         if departingMusic != nil {
             if canKeepDeparting && requested == .none && animated
-                && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { return .none }
+                && !(AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) { return .none }
             musicDepartureWork?.cancel(); musicDepartureWork = nil
             departingMusic = nil
             // A new presentation must replace the departure's forward-filled mask.
             return requested == .none ? (animated ? .reveal : .replace) : requested
         }
-        guard requested == .none, animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+        guard requested == .none, animated, !(AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion),
               panel?.isVisible == true, let presentedMusic, !musicVisible else { return requested }
         if canKeepDeparting {
             // A held track is the one on screen.
@@ -2080,6 +2080,7 @@ final class NotchService: ObservableObject {
     }
 
     func refreshPresentation(animated: Bool = true, transitionContent: NotchContentTransition = .none) {
+        let animated = animated && !AppInfo.usesIntelLowMotion
         activitySelection.reconcile(available: compactActivities)
         if fullscreenCompact {
             finishMusicDeparture()

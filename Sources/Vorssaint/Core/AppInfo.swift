@@ -5,6 +5,13 @@ import Foundation
 
 /// Static identity of the app, shared by UI, notifications and tooling.
 enum AppInfo {
+    /// Keep the experimental Intel/OCLP compositor free of decorative motion.
+    /// The override is only for controlled local performance comparisons.
+    #if VORSSAINT_INTEL
+    static let usesIntelLowMotion = ProcessInfo.processInfo.environment["BARKIT_FULL_MOTION"] != "1"
+    #else
+    static let usesIntelLowMotion = false
+    #endif
     #if VORSSAINT_INTEL
     static let name = "BarKit Intel"
     #else

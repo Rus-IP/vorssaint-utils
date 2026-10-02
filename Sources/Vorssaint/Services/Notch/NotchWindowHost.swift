@@ -133,7 +133,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
 
     func hide(animated: Bool, transitionContent: NotchContentTransition = .dismiss) {
         guard isPresented else { return }
-        let animate = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let animate = animated && !(AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         guard !hidesWhenSettled || !animate else { return }
         present(size: CGSize(width: currentGeometry.collapsed.width, height: 0), geometry: currentGeometry,
                 animated: animate, transitionContent: transitionContent == .depart ? .depart : .dismiss,
@@ -143,6 +143,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
     func present(size: CGSize, geometry: NotchGeometry, animated: Bool, transitionContent: NotchContentTransition = .none,
                  quickAccess: NotchQuickAccessConfiguration? = nil, revealFromHidden: Bool = false,
                  hideWhenSettled: Bool = false, usesGlass: Bool = false) {
+        let animated = animated && !AppInfo.usesIntelLowMotion
         // Choosing the capsule or the notch redraws the island at once, even
         // at a size it already has.
         canvas.setFloatingGap(geometry.floatingGap)
@@ -167,7 +168,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
             frameProbe = probe
             probe.attach(level: panel.level, screen: geometry.screen)
         }
-        let canAnimate = animated && (isPresented || revealing) && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let canAnimate = animated && (isPresented || revealing) && !(AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         let previousGutter = quickAccessConfiguration == nil ? 0 : NotchQuickAccessLayout.gutter
         let previousBottom = quickAccessBottomInset(for: targetSize, geometry: currentGeometry)
         let previousFrame = currentGeometry.frame(for: CGSize(width: targetSize.width + previousGutter * 2, height: targetSize.height + previousBottom))
@@ -563,7 +564,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
 
     private func fadeMissionControl(to alpha: CGFloat, completion: (() -> Void)? = nil) {
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.14
+            context.duration = (AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) ? 0 : 0.14
             panel.animator().alphaValue = alpha
         }, completionHandler: completion)
     }

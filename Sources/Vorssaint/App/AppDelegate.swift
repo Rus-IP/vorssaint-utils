@@ -33,6 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private var isTerminating = false
     private var inputSourceRestorationPending = false
     private var cancellables = Set<AnyCancellable>()
+    #if VORSSAINT_INTEL
+    private var performanceTimer: Timer?
+    #endif
     private var settingsWindow: NSWindow?
     private var settingsKeepsAppRegular = false
     private var feedbackWindow: NSWindow?
@@ -102,6 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
                     NSLog("BarKit launch report: %@", error.localizedDescription)
                 }
             }
+        }
+        #endif
+        #if VORSSAINT_INTEL
+        if let path = ProcessInfo.processInfo.environment["BARKIT_PERFORMANCE_REPORT"] {
+            beginIntelPerformanceScenario(path: path)
         }
         #endif
         // Before any window exists, so nothing is ever built with the wrong
@@ -378,6 +386,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         KeepAwakeManager.shared.deactivate(reason: .quit)
     }
 
+    #if VORSSAINT_INTEL
+    /// Local, opt-in comparison of identical UI actions with/without motion.
+    /// Uses the app's own presentation methods; leaves both surfaces closed.
+    private func beginIntelPerformanceScenario(path: String) {
+        let began = ProcessInfo.processInfo.systemUptime
+        let notch = NotchService.shared
+        let originalPinned = notch.pinned
+        var rows = [[String: Any]]()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
+            self?.showPopover(allowRecentClose: true, animate: !AppInfo.usesIntelLowMotion, activate: false)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 40) { [weak self] in
+            self?.closePopover(animated: !AppInfo.usesIntelLowMotion, preservingNotch: true)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 45) {
+            notch.open(pinned: true, takeFocus: false)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 70) {
+            notch.collapse()
+            notch.pinned = originalPinned
+        }
+        performanceTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            let elapsed = ProcessInfo.processInfo.systemUptime - began
+            let snapshot = SystemMonitor.shared.snapshot
+            rows.append([
+                "elapsed": elapsed,
+                "popoverShown": self.popover.isShown,
+                "notchExpanded": notch.expanded,
+                "notchModule": notch.selected.rawValue,
+                "lowMotion": AppInfo.usesIntelLowMotion,
+                "cpuCelsius": snapshot.cpuTemperature.map { $0 as Any } ?? NSNull(),
+                "gpuCelsius": snapshot.gpuTemperature.map { $0 as Any } ?? NSNull()
+            ])
+            let report: [String: Any] = [
+                "pid": ProcessInfo.processInfo.processIdentifier,
+                "commit": AppInfo.buildCommit ?? "unknown",
+                "samples": rows
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]) {
+                try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+            }
+            if elapsed >= 90 { timer.invalidate(); self.performanceTimer = nil }
+        }
+    }
+    #endif
+
     /// The lifeline when the menu bar icon goes missing. Opening the app again
     /// from Finder, Spotlight or Launchpad while it's already running lands here:
     /// force the icon back and pop the panel so there's immediate proof the app is
@@ -484,7 +539,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // user works in our own Settings window and sees changes live. Click
         // monitors below dismiss it when it would block that same Settings window.
         popover.behavior = .applicationDefined
-        popover.animates = true
+        popover.animates = !AppInfo.usesIntelLowMotion
         // The panel paints its own glass surface, or the arrow tip would show plain
         // system material where the surface stops, the seam users see. The visible
         // content stays inset either way, before through the content view's frame
@@ -493,7 +548,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // out, so the panel keeps the inset content there.
         popover.hasFullSizeContent = PanelSurface.popoverHostsFullSizeContent
         popover.delegate = self
-        let host = NSHostingController(rootView: MenuPanelView())
+        let host = NSHostingController(rootView: MenuPanelView().environment(\.accessibilityReduceMotion,
+            AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
         host.sizingOptions = .preferredContentSize
         popover.contentViewController = host
         AppAppearanceController.shared.follow(panel: popover)
@@ -570,7 +626,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         popover.animates = false
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         MenuPanelFocus.shared.setPopoverVisible(popover.isShown)
-        popover.animates = true
+        popover.animates = !AppInfo.usesIntelLowMotion
         popover.contentViewController?.view.window?.makeKey()
         if let window = popover.contentViewController?.view.window {
             configurePopoverWindow(window)
@@ -917,7 +973,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
                      of: positioningView,
                      preferredEdge: .minY)
         MenuPanelFocus.shared.setPopoverVisible(popover.isShown)
-        popover.animates = true
+        popover.animates = !AppInfo.usesIntelLowMotion
         guard popover.isShown,
               let popoverWindow = popover.contentViewController?.view.window else {
             endPopoverDriftCorrection()
@@ -979,7 +1035,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         popoverIsClosing = true
         popover.animates = false
         popover.close()
-        popover.animates = true
+        popover.animates = !AppInfo.usesIntelLowMotion
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self, weak button] in
             guard let self else {
                 MenuPanelFocus.shared.setSwitchingMetricAnchor(false)
@@ -1026,7 +1082,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         MenuPanelFocus.shared.setPopoverVisible(popover.isShown)
         if !animate {
-            popover.animates = true
+            popover.animates = !AppInfo.usesIntelLowMotion
         }
         if let window = popover.contentViewController?.view.window {
             configurePopoverWindow(window)
@@ -1222,7 +1278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         } else {
             popover.animates = false
             popover.close()
-            popover.animates = true
+            popover.animates = !AppInfo.usesIntelLowMotion
         }
     }
 

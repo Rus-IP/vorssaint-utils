@@ -122,7 +122,7 @@ final class NotchAgentAnimationView: NSView {
     override func layout() { super.layout(); updateLayers() }
 
     private func updateLayers() {
-        let moving = animates && !isHiddenOrHasHiddenAncestor
+        let moving = animates && !AppInfo.usesIntelLowMotion && !isHiddenOrHasHiddenAncestor
             && window?.isVisible == true && window?.occlusionState.contains(.visible) == true
         CATransaction.begin()
         CATransaction.setDisableActions(true)
