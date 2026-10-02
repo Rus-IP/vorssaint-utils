@@ -555,8 +555,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // out, so the panel keeps the inset content there.
         popover.hasFullSizeContent = PanelSurface.popoverHostsFullSizeContent
         popover.delegate = self
-        let host = NSHostingController(rootView: MenuPanelView().environment(\.accessibilityReduceMotion,
-            AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
+        let host = NSHostingController(rootView: MenuPanelView().transaction { transaction in
+            if AppInfo.usesIntelLowMotion {
+                transaction.disablesAnimations = true
+                transaction.animation = nil
+            }
+        })
         host.sizingOptions = .preferredContentSize
         popover.contentViewController = host
         AppAppearanceController.shared.follow(panel: popover)

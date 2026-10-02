@@ -109,8 +109,12 @@ struct NotchQuickAccessView: View {
             }
         }
         .environment(\.colorScheme, .dark)
-        .environment(\.accessibilityReduceMotion,
-                     AppInfo.usesIntelLowMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+            .transaction { transaction in
+                if AppInfo.usesIntelLowMotion {
+                    transaction.disablesAnimations = true
+                    transaction.animation = nil
+                }
+            }
         .environment(\.notchPresentation, true)
         .foregroundStyle(.white)
         .tint(.white)
