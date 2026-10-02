@@ -49,6 +49,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        #if VORSSAINT_INTEL
+        // Optional local startup evidence for unsupported Intel/OCLP machines.
+        // The report stays on disk and records no clipboard, files or app inventory.
+        if let reportPath = ProcessInfo.processInfo.environment["BARKIT_LAUNCH_REPORT"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                guard let self else { return }
+                let report: [String: Any] = [
+                    "name": AppInfo.name,
+                    "version": AppInfo.version,
+                    "commit": AppInfo.buildCommit ?? "unknown",
+                    "bundleID": Bundle.main.bundleIdentifier ?? "unknown",
+                    "pid": ProcessInfo.processInfo.processIdentifier,
+                    "os": ProcessInfo.processInfo.operatingSystemVersionString,
+                    "statusItemVisible": self.statusController?.statusItem?.isVisible ?? false,
+                    "statusButtonPresent": self.statusController?.button != nil,
+                    "statusButtonHasWindow": self.statusController?.button?.window != nil,
+                    "onboardingVisible": self.onboardingWindow?.isVisible ?? false,
+                    "visibleWindowCount": NSApp.windows.filter { $0.isVisible }.count,
+                    "automaticUpdatesDisabled": AppInfo.isDeveloperBuild
+                ]
+                do {
+                    let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
+                    try data.write(to: URL(fileURLWithPath: reportPath), options: .atomic)
+                } catch {
+                    NSLog("BarKit launch report: %@", error.localizedDescription)
+                }
+            }
+        }
+        #endif
         // Before any window exists, so nothing is ever built with the wrong
         // appearance and then repainted.
         AppAppearanceController.shared.apply()

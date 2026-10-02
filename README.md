@@ -1,3 +1,5 @@
+> **Unofficial Intel experiment:** this branch builds **BarKit Intel** on GitHub for macOS 14 Sonoma and later. See [Intel build notes](docs/INTEL-SONOMA.md). Intel/OCLP runtime compatibility is experimental. The original project documentation follows below.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/logo-dark.svg">

@@ -6,7 +6,9 @@ import Foundation
 enum FanControlIdentifiers {
     static let teamID = "3D485NHW29"
 
-    #if VORSSAINT_DEVELOPMENT
+    #if VORSSAINT_INTEL
+    static let appBundleID = "io.github.rus-ip.barkit-intel.dev"
+    #elseif VORSSAINT_DEVELOPMENT
     static let appBundleID = "com.vorssaint.utils.dev"
     #else
     static let appBundleID = "com.vorssaint.utils"

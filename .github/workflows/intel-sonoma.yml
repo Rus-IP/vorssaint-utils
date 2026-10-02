@@ -1,0 +1,52 @@
+name: Intel Sonoma build
+
+on:
+  push:
+    branches: [codex/intel-sonoma]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intel-sonoma-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Verify Intel toolchain
+        run: |
+          test "$(uname -m)" = x86_64
+          swiftc --version
+          xcrun --show-sdk-version
+      - name: Compile Intel app for macOS 14
+        run: ./build.sh --intel
+      - name: Verify bundle and package
+        run: |
+          set -euo pipefail
+          APP='build/stage/BarKit Intel.app'
+          test "$(lipo -archs "$APP/Contents/MacOS/BarKitIntel")" = x86_64
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")" = 14.0
+          codesign --verify --deep --strict "$APP"
+          otool -l "$APP/Contents/MacOS/BarKitIntel" > build/intel-load-commands.txt
+          ditto -c -k --sequesterRsrc --keepParent "$APP" build/BarKit-Intel-Sonoma.zip
+          shasum -a 256 build/BarKit-Intel-Sonoma.zip > build/SHA256SUMS.txt
+          git rev-parse HEAD > build/SOURCE_COMMIT.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: BarKit-Intel-Sonoma
+          path: |
+            build/BarKit-Intel-Sonoma.zip
+            build/SHA256SUMS.txt
+            build/SOURCE_COMMIT.txt
+            build/intel-load-commands.txt
+          retention-days: 14
+          if-no-files-found: error
