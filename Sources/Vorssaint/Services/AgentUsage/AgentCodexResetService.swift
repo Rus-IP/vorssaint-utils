@@ -5,8 +5,8 @@ import AppKit
 import Combine
 import Foundation
 
-/// The Codex account's banked resets for the AI page: read when their card
-/// shows, at most every few minutes, and used only when the person confirms.
+/// The Codex account's banked resets and limits: polled by the usage service
+/// once a minute, and used only when the person confirms.
 final class AgentCodexResetService: ObservableObject {
     static let shared = AgentCodexResetService()
 
@@ -24,13 +24,13 @@ final class AgentCodexResetService: ObservableObject {
     @Published private(set) var finished: Finished?
 
     /// A reading this recent still stands; a failed one is tried sooner.
-    static let freshness: TimeInterval = 5 * 60
+    static let freshness: TimeInterval = AgentCodexLimitPoller.interval
     static let retryAfter: TimeInterval = 60
     /// Long enough for any reply still on its way; after it, a fresh reading
     /// tells whether an unanswered use happened.
     static let retryWindow: TimeInterval = 10 * 60
 
-    private let queue = DispatchQueue(label: "com.vorssaint.codex-resets", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "com.vorssaint.codex-resets", qos: .utility)
     private var attempted = Date.distantPast
     /// A Terminal window's PATH, asked of the login shell only when the
     /// person looks again for a Codex that was not found: that runs their

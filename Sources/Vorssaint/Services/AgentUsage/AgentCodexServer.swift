@@ -4,6 +4,42 @@
 import Darwin
 import Foundation
 
+/// Account checks run while the usage service is awake, even with its page
+/// closed. Starting (including after wake) and opening the page also check
+/// immediately. Repeated preference syncs never add another timer.
+final class AgentCodexLimitPoller {
+    static let interval: TimeInterval = 60
+    private let interval: TimeInterval
+    private let refresh: () -> Void
+    private var timer: Timer?
+
+    init(interval: TimeInterval = AgentCodexLimitPoller.interval, refresh: @escaping () -> Void) {
+        self.interval = interval
+        self.refresh = refresh
+    }
+
+    func start() {
+        guard timer == nil else { return }
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.refreshNow() }
+        timer.tolerance = min(2, interval / 10)
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+        refreshNow()
+    }
+
+    func refreshNow() {
+        guard timer != nil else { return }
+        refresh()
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    deinit { timer?.invalidate() }
+}
+
 /// A banked reset: one renewal of the Codex session and weekly limits at
 /// once, kept on the account until it is used or expires.
 struct AgentCodexReset: Equatable, Identifiable {

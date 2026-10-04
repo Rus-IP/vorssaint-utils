@@ -7,9 +7,33 @@ import Foundation
 /// found, and whole conversations with a stand-in server.
 enum AgentCodexResetTests {
     static func run(_ suite: TestSuite) {
+        polling(suite)
         answers(suite)
         discovery(suite)
         conversations(suite)
+    }
+
+    private static func polling(_ suite: TestSuite) {
+        suite.expect(AgentCodexLimitPoller.interval == 60, "account limits poll every minute")
+        var checks = 0
+        let poller = AgentCodexLimitPoller(interval: 0.02) { checks += 1 }
+        poller.refreshNow()
+        suite.expect(checks == 0, "a stopped or disabled reader does not query the account")
+        poller.start()
+        poller.start()
+        suite.expect(checks == 1, "starting checks immediately and repeated preference syncs do not check again")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.055))
+        suite.expect(checks >= 3, "the closed page still receives periodic account checks")
+        poller.stop()
+        let stopped = checks
+        poller.refreshNow()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.055))
+        suite.expect(checks == stopped, "sleep, lock and disabling the reader stop periodic and page checks")
+        poller.start()
+        suite.expect(checks == stopped + 1, "waking the reader checks immediately")
+        poller.refreshNow()
+        suite.expect(checks == stopped + 2, "opening the page requests fresh limits before the next minute")
+        poller.stop()
     }
 
     private static func json(_ text: String) -> [String: Any] {

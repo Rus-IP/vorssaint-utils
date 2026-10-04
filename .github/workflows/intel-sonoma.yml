@@ -32,6 +32,8 @@ jobs:
           mkdir -p build
           swiftc -target x86_64-apple-macosx14.0 Sources/Vorssaint/Services/Metrics/TemperatureSensorSelector.swift Tools/IntelTemperatureTests.swift -o build/intel-temperature-tests
           ./build/intel-temperature-tests
+      - name: Agent limit and archive regression tests
+        run: ./build.sh --intel --test-suite=agents
       - name: Compile Intel app for macOS 14
         run: ./build.sh --intel
       - name: Verify bundle and package

@@ -10,8 +10,9 @@ import Foundation
 /// incrementally, and nothing is copied or sent: only counters are kept, in
 /// memory and in the app's private folder so the next launch reads only what
 /// the agents wrote meanwhile. OpenCode's stay in memory only, and its
-/// database is read again at each launch. The one request it makes fetches
-/// the public price list, when the person keeps prices up to date.
+/// database is read again at each launch. Codex's own server also reads the
+/// account's plan limits once a minute, without starting an agent task.
+/// The public price list is fetched when the person keeps prices up to date.
 ///
 /// Reading happens on a private queue; the main thread and that queue hand
 /// work to each other asynchronously, except that a stop waits for progress
@@ -58,6 +59,9 @@ final class AgentUsageService: ObservableObject {
     private var session = 0
     private var cancellation = Cancellation()
     private var timer: Timer?
+    private lazy var codexLimitPoller = AgentCodexLimitPoller {
+        AgentCodexResetService.shared.refresh()
+    }
     private var providers: [AgentProvider] = []
     private var pricesInFlight = false
     private var pricesAttempted = Date.distantPast
@@ -114,6 +118,8 @@ final class AgentUsageService: ObservableObject {
             resume()
         }
         syncPrices()
+        if providers.contains(.codex), !paused { codexLimitPoller.start() }
+        else { codexLimitPoller.stop() }
     }
 
     /// Stops reading while the island is away, as with the display asleep or
@@ -122,6 +128,7 @@ final class AgentUsageService: ObservableObject {
     func pause() {
         guard running, !paused else { return }
         paused = true
+        codexLimitPoller.stop()
         timer?.invalidate()
         timer = nil
         queue.async { [self] in
@@ -147,6 +154,7 @@ final class AgentUsageService: ObservableObject {
     }
 
     func stop(keepingProgress keeps: Bool = true) {
+        codexLimitPoller.stop()
         // A first read still going stops at its next chunk, so the wait
         // below is short.
         if running { cancellation.cancel() }
@@ -198,9 +206,11 @@ final class AgentUsageService: ObservableObject {
         }
     }
 
-    /// Opening the page shows the latest limits the Claude app saved.
+    /// Opening the page refreshes the account's limits even if the reset
+    /// card is hidden, along with the latest limits the Claude app saved.
     func pageDidAppear() {
         guard running else { return }
+        codexLimitPoller.refreshNow()
         queue.async { [self] in
             guard readerSession >= 0 else { return }
             readClaudeApp(now: Date())

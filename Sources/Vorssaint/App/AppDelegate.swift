@@ -55,6 +55,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         #if VORSSAINT_INTEL
         // Optional local startup evidence for unsupported Intel/OCLP machines.
         // The report stays on disk and records no clipboard, files or app inventory.
+        if let path = ProcessInfo.processInfo.environment["BARKIT_AGENT_LIMIT_REPORT"] {
+            var lastReading: Date?
+            var readings: [[String: Any]] = []
+            AgentUsageService.shared.$snapshot.sink { snapshot in
+                guard let limits = snapshot.limits[.codex], limits.source == .account,
+                      limits.observedAt != lastReading else { return }
+                lastReading = limits.observedAt
+                readings.append([
+                    "observedAt": limits.observedAt.timeIntervalSince1970,
+                    "publishedAt": Date().timeIntervalSince1970,
+                    "islandExpanded": NotchService.shared.expanded,
+                    "windows": limits.windows.map { window -> [String: Any] in
+                        ["id": window.id, "usedPercent": window.usedPercent]
+                    }
+                ])
+                readings = Array(readings.suffix(4))
+                let report: [String: Any] = [
+                    "pid": ProcessInfo.processInfo.processIdentifier,
+                    "commit": AppInfo.buildCommit ?? "unknown",
+                    "intervalSeconds": AgentCodexLimitPoller.interval,
+                    "readings": readings
+                ]
+                if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+                    try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+                }
+            }.store(in: &self.cancellables)
+        }
         if let sensorPath = ProcessInfo.processInfo.environment["BARKIT_SENSOR_REPORT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
                 guard let self else { return }
