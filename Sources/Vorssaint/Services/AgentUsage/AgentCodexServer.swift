@@ -11,19 +11,27 @@ final class AgentCodexLimitPoller {
     static let interval: TimeInterval = 60
     private let interval: TimeInterval
     private let refresh: () -> Void
+    private let schedule: (TimeInterval, @escaping () -> Void) -> Timer
     private var timer: Timer?
 
-    init(interval: TimeInterval = AgentCodexLimitPoller.interval, refresh: @escaping () -> Void) {
+    init(interval: TimeInterval = AgentCodexLimitPoller.interval,
+         schedule: @escaping (TimeInterval, @escaping () -> Void) -> Timer = AgentCodexLimitPoller.scheduleTimer,
+         refresh: @escaping () -> Void) {
         self.interval = interval
+        self.schedule = schedule
         self.refresh = refresh
+    }
+
+    private static func scheduleTimer(interval: TimeInterval, tick: @escaping () -> Void) -> Timer {
+        let timer = Timer(timeInterval: interval, repeats: true) { _ in tick() }
+        timer.tolerance = min(2, interval / 10)
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
     }
 
     func start() {
         guard timer == nil else { return }
-        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.refreshNow() }
-        timer.tolerance = min(2, interval / 10)
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        timer = schedule(interval) { [weak self] in self?.refreshNow() }
         refreshNow()
     }
 

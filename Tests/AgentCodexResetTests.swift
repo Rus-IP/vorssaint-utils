@@ -16,24 +16,36 @@ enum AgentCodexResetTests {
     private static func polling(_ suite: TestSuite) {
         suite.expect(AgentCodexLimitPoller.interval == 60, "account limits poll every minute")
         var checks = 0
-        let poller = AgentCodexLimitPoller(interval: 0.02) { checks += 1 }
+        var timers: [Timer] = []
+        var ticks: [() -> Void] = []
+        let poller = AgentCodexLimitPoller(schedule: { interval, tick in
+            let timer = Timer(timeInterval: interval, repeats: true) { _ in tick() }
+            timers.append(timer)
+            ticks.append(tick)
+            return timer
+        }) { checks += 1 }
         poller.refreshNow()
         suite.expect(checks == 0, "a stopped or disabled reader does not query the account")
         poller.start()
         poller.start()
-        suite.expect(checks == 1, "starting checks immediately and repeated preference syncs do not check again")
-        RunLoop.main.run(until: Date().addingTimeInterval(0.055))
-        suite.expect(checks >= 3, "the closed page still receives periodic account checks")
+        suite.expect(checks == 1 && timers.count == 1 && timers.first?.timeInterval == 60,
+                     "starting checks immediately and repeated preference syncs keep one minute timer")
+        timers.first?.fire()
+        timers.first?.fire()
+        suite.expect(checks == 3, "the closed page still receives periodic account checks")
         poller.stop()
         let stopped = checks
         poller.refreshNow()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.055))
-        suite.expect(checks == stopped, "sleep, lock and disabling the reader stop periodic and page checks")
+        ticks.first?()
+        suite.expect(checks == stopped && timers.first?.isValid == false,
+                     "sleep, lock and disabling the reader invalidate the timer and ignore queued and page checks")
         poller.start()
-        suite.expect(checks == stopped + 1, "waking the reader checks immediately")
+        suite.expect(checks == stopped + 1 && timers.count == 2,
+                     "waking the reader checks immediately and schedules a new timer")
         poller.refreshNow()
         suite.expect(checks == stopped + 2, "opening the page requests fresh limits before the next minute")
         poller.stop()
+        suite.expect(timers.allSatisfy { !$0.isValid }, "every scheduled timer is invalidated on stop")
     }
 
     private static func json(_ text: String) -> [String: Any] {
