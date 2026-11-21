@@ -228,8 +228,8 @@ enum AgentCodexServer {
 final class AgentCodexConversation: AgentCLIConversation {
     private var lastID = 0
     init?(_ executable: URL, environment: [String: String], timeout: TimeInterval) {
-        // Account metadata does not need plugins or marketplace updates.
-        super.init(executable, arguments: ["-c", "features.plugins=false", "app-server"],
+        // Same arguments the fork has always used for Codex.
+        super.init(executable, arguments: ["app-server"],
                    environment: environment, timeout: timeout)
     }
 
