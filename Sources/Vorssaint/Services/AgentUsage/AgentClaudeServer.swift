@@ -19,8 +19,11 @@ enum AgentClaudeServer {
     static let timeout: TimeInterval = 25
     /// While the AI page is on screen a reading this old is asked again.
     static let freshness: TimeInterval = 60
-    /// Otherwise Claude Code starts at most this often, as the Codex check does.
-    static let backgroundFreshness: TimeInterval = 5 * 60
+    /// Off the page too, as the Codex check does: a background poller asks
+    /// once a minute so the island's percentage follows use elsewhere.
+    static let backgroundFreshness: TimeInterval = AgentCodexLimitPoller.interval
+    /// A timer firing a moment early still counts as a minute gone by.
+    static let pollSlack: TimeInterval = 5
     static let retryAfter: TimeInterval = 5 * 60
     /// Only the person can install, update or sign in to Claude Code.
     static let settledRetry: TimeInterval = 30 * 60

@@ -56,26 +56,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // Optional local startup evidence for unsupported Intel/OCLP machines.
         // The report stays on disk and records no clipboard, files or app inventory.
         if let path = ProcessInfo.processInfo.environment["BARKIT_AGENT_LIMIT_REPORT"] {
-            var lastReading: Date?
-            var readings: [[String: Any]] = []
+            var lastReading: [AgentProvider: Date] = [:]
+            var readings: [AgentProvider: [[String: Any]]] = [:]
             AgentUsageService.shared.$snapshot.sink { snapshot in
-                guard let limits = snapshot.limits[.codex], limits.source == .account,
-                      limits.observedAt != lastReading else { return }
-                lastReading = limits.observedAt
-                readings.append([
-                    "observedAt": limits.observedAt.timeIntervalSince1970,
-                    "publishedAt": Date().timeIntervalSince1970,
-                    "islandExpanded": NotchService.shared.expanded,
-                    "windows": limits.windows.map { window -> [String: Any] in
-                        ["id": window.id, "usedPercent": window.usedPercent]
-                    }
-                ])
-                readings = Array(readings.suffix(4))
+                var changed = false
+                for provider in [AgentProvider.codex, .claude] {
+                    guard let limits = snapshot.limits[provider], limits.source == .account,
+                          limits.observedAt != lastReading[provider] else { continue }
+                    lastReading[provider] = limits.observedAt
+                    changed = true
+                    let entry: [String: Any] = [
+                        "observedAt": limits.observedAt.timeIntervalSince1970,
+                        "publishedAt": Date().timeIntervalSince1970,
+                        "islandExpanded": NotchService.shared.expanded,
+                        "windows": limits.windows.map { window -> [String: Any] in
+                            ["id": window.id, "usedPercent": window.usedPercent]
+                        }
+                    ]
+                    readings[provider] = Array(((readings[provider] ?? []) + [entry]).suffix(4))
+                }
+                guard changed else { return }
                 let report: [String: Any] = [
                     "pid": ProcessInfo.processInfo.processIdentifier,
                     "commit": AppInfo.buildCommit ?? "unknown",
                     "intervalSeconds": AgentCodexLimitPoller.interval,
-                    "readings": readings
+                    "readings": readings[.codex] ?? [],
+                    "claudeReadings": readings[.claude] ?? []
                 ]
                 if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                     try? data.write(to: URL(fileURLWithPath: path), options: .atomic)

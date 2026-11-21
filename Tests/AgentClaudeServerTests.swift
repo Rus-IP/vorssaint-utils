@@ -48,11 +48,11 @@ enum AgentClaudeServerTests {
                         && AgentClaudeServer.current(idle, now: now.addingTimeInterval(5 * 3_600))?.windows.first?.kind == .weekly,
                      "an idle session without a renewal keeps its row for as long as the Claude app history would")
         suite.expect(AgentClaudeServer.interval(after: nil, pageVisible: true) == 60
-                        && AgentClaudeServer.interval(after: nil, pageVisible: false) == 300
+                        && AgentClaudeServer.interval(after: nil, pageVisible: false) == 60
                         && AgentClaudeServer.interval(after: .unreachable, pageVisible: true) == 300
                         && [AgentClaudeServer.Failure.missing, .needsSignIn, .outdated].allSatisfy {
                             AgentClaudeServer.interval(after: $0, pageVisible: true) == 1_800 },
-                     "Claude Code is asked every minute only while the AI page shows, and rarely after a failure only the person can fix")
+                     "Claude Code is asked every minute with the AI page open or closed, and rarely after a failure only the person can fix")
         suite.expect(AgentClaudeServer.current(limits, now: AgentTimestamp.parse("2026-10-15T11:00:00Z")!)?
             .windows.map(\.kind) == [.weekly, .weekly]
             && AgentClaudeServer.current(limits, now: AgentTimestamp.parse("2026-10-18T00:00:00Z")!) == nil,

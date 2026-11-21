@@ -65,6 +65,10 @@ final class AgentUsageService: ObservableObject {
     private lazy var codexLimitPoller = AgentCodexLimitPoller {
         AgentCodexResetService.shared.refresh()
     }
+    /// Claude Code is asked once a minute too, with the AI page closed.
+    private lazy var claudeLimitPoller = AgentCodexLimitPoller { [weak self] in
+        self?.refreshClaudeLimits()
+    }
     private var providers: [AgentProvider] = []
     private var pricesInFlight = false
     private var pricesAttempted = Date.distantPast
@@ -129,6 +133,8 @@ final class AgentUsageService: ObservableObject {
         syncPrices()
         if providers.contains(.codex), !paused { codexLimitPoller.start() }
         else { codexLimitPoller.stop() }
+        if providers.contains(.claude), !paused { claudeLimitPoller.start() }
+        else { claudeLimitPoller.stop() }
         refreshClaudeLimits()
     }
 
@@ -139,6 +145,7 @@ final class AgentUsageService: ObservableObject {
         guard running, !paused else { return }
         paused = true
         codexLimitPoller.stop()
+        claudeLimitPoller.stop()
         cancelClaudeLimits()
         timer?.invalidate()
         timer = nil
@@ -166,6 +173,7 @@ final class AgentUsageService: ObservableObject {
 
     func stop(keepingProgress keeps: Bool = true) {
         codexLimitPoller.stop()
+        claudeLimitPoller.stop()
         // A first read still going stops at its next chunk, so the wait
         // below is short.
         if running { cancellation.cancel() }
@@ -682,12 +690,12 @@ final class AgentUsageService: ObservableObject {
     }
 
     // Main thread. Never query while the feature is off, asleep or already
-    // checking. Every minute only while the page shows; failures back off,
-    // and looking at the page does not bypass that.
+    // checking. Every minute, page or not; failures back off, and looking at
+    // the page does not bypass that.
     func refreshClaudeLimits(now: Date = Date()) {
         guard running, !paused, providers.contains(.claude), claudeAccountRequest == nil else { return }
         let interval = AgentClaudeServer.interval(after: claudeAccountFailure, pageVisible: pageVisible)
-        guard now.timeIntervalSince(claudeAccountAttempted) >= interval else { return }
+        guard now.timeIntervalSince(claudeAccountAttempted) >= interval - AgentClaudeServer.pollSlack else { return }
         claudeAccountAttempted = now
         claudeAccountChecking = true
         let request = AgentClaudeServer.Request()
