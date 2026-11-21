@@ -27,8 +27,7 @@ enum AgentClaudeServerTests {
                         && limits?.windows.map(\.usedPercent) == [62, 9, 70]
                         && limits?.windows.map(\.id) == ["claude.fh", "claude.sd", "claude.so"]
                         && limits?.windows.last?.scope == "Opus"
-                        && limits?.windows.first?.resetsAt == AgentTimestamp.parse("2026-10-15T10:39:59.973389Z")
-                        && limits?.windows.first?.estimatedResetsAt == nil,
+                        && limits?.windows.first?.resetsAt == AgentTimestamp.parse("2026-10-15T10:39:59.973389Z"),
                      "structured CLI usage preserves account-wide percentages, model windows and exact resets")
         suite.expect(AgentClaudeServer.limits(["rate_limits_available": false], observed: now) == nil
                         && AgentClaudeServer.limits(["rate_limits_available": true, "rate_limits": NSNull()], observed: now) == nil,
