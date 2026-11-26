@@ -20,8 +20,14 @@ enum AgentClaudeServer {
     /// While the AI page is on screen a reading this old is asked again.
     static let freshness: TimeInterval = 60
     /// Off the page too, as the Codex check does: a background poller asks
-    /// once a minute so the island's percentage follows use elsewhere.
+    /// periodically so the island's percentage follows use elsewhere.
+    /// On Intel builds, relax the background cadence to 3 minutes because each
+    /// check spawns a full Claude CLI cold start.
+    #if VORSSAINT_INTEL
+    static let backgroundFreshness: TimeInterval = 3 * 60
+    #else
     static let backgroundFreshness: TimeInterval = AgentCodexLimitPoller.interval
+    #endif
     /// A timer firing a moment early still counts as a minute gone by.
     static let pollSlack: TimeInterval = 5
     static let retryAfter: TimeInterval = 5 * 60

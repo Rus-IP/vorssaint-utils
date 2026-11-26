@@ -198,15 +198,20 @@ enum AppUpdatesContract {
         suite.expect(!resolvedMixed.available && Set(resolvedMixed.uncheckedApps.map(\.path)) == Set(batch.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map { $0.element.path }),
                      "out-of-order batches keep real failures separate from covered absent feeds")
         suite.expect(ResponseProtocol.requestCount == 6, "every distinct feed is visited once across batches")
+        #if VORSSAINT_INTEL
+        let batchSize = 2
+        #else
+        let batchSize = 4
+        #endif
         for cutoff in [1, 2] {
             let service = Service()
             service.clock.expireAfterReads = cutoff
             ResponseProtocol.reset(Dictionary(uniqueKeysWithValues: batch.map { ($0.updateFeed!.url.absoluteString, .init(status: 404)) }))
             let stopped = publisher(batch, service: service, suite: suite)
             let resolved = stopped.resolvingCatalogFallback(checkedPaths: Set(batch.map(\.path)), candidates: batch)
-            suite.expect(!resolved.available && resolved.uncheckedApps.count == (cutoff == 1 ? 6 : 2),
+            suite.expect(!resolved.available && resolved.uncheckedApps.count == (cutoff == 1 ? 6 : 6 - batchSize),
                          "deadline-cut feeds stay named even with complete catalog coverage")
-            suite.expect(ResponseProtocol.requestCount == (cutoff == 1 ? 0 : 4), "deadline stops new batches")
+            suite.expect(ResponseProtocol.requestCount == (cutoff == 1 ? 0 : batchSize), "deadline stops new batches")
         }
         ResponseProtocol.reset([:])
         let empty = publisher([], suite: suite)

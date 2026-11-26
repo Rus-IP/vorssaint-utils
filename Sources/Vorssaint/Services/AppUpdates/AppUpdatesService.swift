@@ -39,7 +39,11 @@ final class AppUpdatesService: ObservableObject {
     @Published private(set) var hasCheckedThisSession = false
     @Published private(set) var lastError: String?
 
+    #if VORSSAINT_INTEL
+    private let workQueue = DispatchQueue(label: "com.vorssaint.appupdates", qos: .background)
+    #else
     private let workQueue = DispatchQueue(label: "com.vorssaint.appupdates", qos: .utility)
+    #endif
     private lazy var lookupSession: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 10
@@ -49,6 +53,11 @@ final class AppUpdatesService: ObservableObject {
     private lazy var catalogSession: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.requestCachePolicy = .useProtocolCachePolicy
+        #if VORSSAINT_INTEL
+        // cask.json exceeds the default 10 MB URLCache disk budget; give it room
+        // so conditional HTTP ETag/304 checks avoid re-downloading the full catalog.
+        configuration.urlCache = URLCache(memoryCapacity: 0, diskCapacity: 32 * 1024 * 1024)
+        #endif
         configuration.timeoutIntervalForRequest = 10
         configuration.timeoutIntervalForResource = 20
         return URLSession(configuration: configuration)
@@ -328,8 +337,21 @@ final class AppUpdatesService: ObservableObject {
             return PackageResult(items: [], coveredPaths: [], available: !includeUpdates,
                                  onlineCoverageAvailable: true)
         }
+        #if VORSSAINT_INTEL
+        var installedEnv = HomebrewEnvironment.forBrew
+        installedEnv["HOMEBREW_NO_AUTO_UPDATE"] = "1"
+        installedEnv["HOMEBREW_NO_ENV_HINTS"] = "1"
+        var outdatedEnv = HomebrewEnvironment.forBrew
+        outdatedEnv["HOMEBREW_NO_ENV_HINTS"] = "1"
+        if outdatedEnv["HOMEBREW_API_AUTO_UPDATE_SECS"] == nil {
+            outdatedEnv["HOMEBREW_API_AUTO_UPDATE_SECS"] = "3600"
+        }
+        #else
+        let installedEnv = HomebrewEnvironment.forBrew
+        let outdatedEnv = HomebrewEnvironment.forBrew
+        #endif
         let installedOutput = Self.runCommand(HomebrewCommandBuilder.installed(brewPath: brewPath),
-                                              environment: HomebrewEnvironment.forBrew)
+                                              environment: installedEnv)
         let records = installedOutput.status == 0
             ? HomebrewParser.parseInstalledCaskRecords(installedOutput.output)
             : []
@@ -342,7 +364,7 @@ final class AppUpdatesService: ObservableObject {
         }
         let outdatedOutput = Self.runCommand(
             HomebrewCommandBuilder.outdatedCasksIncludingSelfUpdating(brewPath: brewPath),
-            environment: HomebrewEnvironment.forBrew)
+            environment: outdatedEnv)
         guard installedOutput.status == 0, outdatedOutput.status == 0 else {
             let failure = [outdatedOutput, installedOutput].first { $0.status != 0 }
             let message = failure.map { HomebrewProgressParser.visibleError(from: $0.output) } ?? ""
@@ -477,7 +499,12 @@ final class AppUpdatesService: ObservableObject {
                                         }, catalogFallbackPaths: catalogFallbackPaths))
                 return
             }
-            let end = min(start + 4, feeds.count)
+            #if VORSSAINT_INTEL
+            let batchSize = 2
+            #else
+            let batchSize = 4
+            #endif
+            let end = min(start + batchSize, feeds.count)
             let group = DispatchGroup()
             for (feed, apps) in feeds[start..<end] {
                 group.enter()
@@ -522,7 +549,9 @@ final class AppUpdatesService: ObservableObject {
         }
 
         var request = URLRequest(url: AppUpdatesSupport.onlineCatalogURL)
+        #if !VORSSAINT_INTEL
         if forceRefresh { request.cachePolicy = .reloadIgnoringLocalCacheData }
+        #endif
         catalogSession.dataTask(with: request) { [weak self] data, response, _ in
             guard let self else { return }
             let statusCode = (response as? HTTPURLResponse)?.statusCode

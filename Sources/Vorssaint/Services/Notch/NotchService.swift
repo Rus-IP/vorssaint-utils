@@ -270,6 +270,7 @@ final class NotchService: ObservableObject {
     }
 
     var hasCalendarActivity: Bool {
+        guard NotchCalendarSupport.isEnabled() else { return false }
         let calendar = NotchCalendarService.shared
         guard let countdown = calendar.countdown,
               countdown.ongoing ? NotchCalendarSupport.showsTimeLeft()
@@ -2545,8 +2546,15 @@ final class NotchService: ObservableObject {
             && (idleContent != .none || compactActivity != nil || !geometry.isNotched)
         guard wanted else { stopMenuSpaceMonitoring(); return }
         guard menuSpaceTimer == nil else { return }
-        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.readMenuSpace() }
-        timer.tolerance = 0.2
+        #if VORSSAINT_INTEL
+        let interval: TimeInterval = 5
+        let tolerance: TimeInterval = 1
+        #else
+        let interval: TimeInterval = 1
+        let tolerance: TimeInterval = 0.2
+        #endif
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.readMenuSpace() }
+        timer.tolerance = tolerance
         menuSpaceTimer = timer
         RunLoop.main.add(timer, forMode: .common)
         readMenuSpace()

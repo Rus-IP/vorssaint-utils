@@ -68,6 +68,7 @@ final class FinderCutPaste: ObservableObject {
     private var tapThread: Thread?
     private var shouldStopTapThread = false
     private var pendingTapRestart = false
+    private var cachedFinderFrontmost = false
     private var panel: NSPanel?
     private var resultDismiss: DispatchWorkItem?
     private var operationGeneration = 0
@@ -90,6 +91,7 @@ final class FinderCutPaste: ObservableObject {
     }
 
     private init() {
+        refreshCachedFinderFrontmost()
         SessionActivity.shared.onChange { [weak self] _ in self?.syncWithPreferences() }
     }
 
@@ -99,8 +101,14 @@ final class FinderCutPaste: ObservableObject {
         NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Self.finderBundleID
     }
 
+    private func refreshCachedFinderFrontmost() {
+        let frontmost = isFinderFrontmost
+        tapLifecycleLock.withLock { cachedFinderFrontmost = frontmost }
+    }
+
     /// Applies the persisted preference; safe to call repeatedly.
     func syncWithPreferences() {
+        refreshCachedFinderFrontmost()
         let available = AppFeature.finderCutPaste.isAvailable
         cutPasteEnabled = available
             && UserDefaults.standard.bool(forKey: DefaultsKey.finderCutPasteEnabled)
@@ -114,10 +122,12 @@ final class FinderCutPaste: ObservableObject {
         } else {
             removeTap()
         }
-        if cutPasteEnabled {
+        if cutPasteEnabled || pasteImageAsFileEnabled {
             installAppObserver()
         } else {
             removeAppObserver()
+        }
+        if !cutPasteEnabled {
             clearMarks()
         }
         refreshPanel()
@@ -151,6 +161,7 @@ final class FinderCutPaste: ObservableObject {
     }
 
     private func handleApplicationActivation() {
+        refreshCachedFinderFrontmost()
         guard cutPasteEnabled else { return }
         refreshPanel()
     }
@@ -272,7 +283,8 @@ final class FinderCutPaste: ObservableObject {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         guard flags.contains(.maskCommand),
               !flags.contains(.maskControl), !flags.contains(.maskAlternate),
-              keyCode == Key.x || keyCode == Key.c || keyCode == Key.v
+              keyCode == Key.x || keyCode == Key.c || keyCode == Key.v,
+              tapLifecycleLock.withLock({ cachedFinderFrontmost })
         else { return Unmanaged.passUnretained(event) }
 
         var verdict: Unmanaged<CGEvent>?

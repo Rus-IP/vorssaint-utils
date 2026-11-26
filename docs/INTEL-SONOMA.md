@@ -52,3 +52,22 @@ no performance timer and perform none of these diagnostic actions.
 Floating shortcuts accept the first click in an inactive island window. A non-animated reveal
 enables input immediately; animated reveals also have a generation-checked completion deadline
 so a missing SwiftUI completion cannot leave visible shortcuts permanently disabled.
+
+## Intel background polling and CPU smoothing
+
+To reduce wakeups, WindowServer/AX IPC, and CPU bursts on dual-core Intel/OCLP machines, the
+Intel build adjusts several background cadences while keeping all features active:
+
+- **Claude Code background limits:** polled every 3 minutes when the AI page is closed (still
+  refreshes at 60 seconds when opening the AI page); active session log polling runs every 5s.
+- **Notch WindowServer/AX monitors:** Mission Control idle check runs at 1.5s (retaining 0.08s
+  while Mission Control is active); periodic menu-bar AX scan runs at 5s alongside event-driven
+  refreshes on app activation and display changes.
+- **Finder Cut & Paste tap:** caches whether Finder is frontmost so `Cmd+X/C/V` in other apps
+  returns on the tap thread without synchronously blocking on the main queue.
+- **EventKit lazy check:** skips `EKEventStore.authorizationStatus(for: .event)` and
+  `NotchCalendarService` initialization when the calendar module is disabled.
+- **App Updates scan:** runs its work queue at `.background` QoS, halves concurrent publisher feed
+  fetches (4 -> 2), skips Homebrew auto-update on `brew info --installed` (and throttles
+  `HOMEBREW_API_AUTO_UPDATE_SECS` to 1 hour if unset), and keeps HTTP conditional caching for
+  the online cask catalog with a 32 MB disk cache.

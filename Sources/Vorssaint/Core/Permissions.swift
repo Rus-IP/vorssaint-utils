@@ -27,7 +27,8 @@ final class Permissions: ObservableObject {
     /// Camera access for the preview mirror. The status read is free, so it
     /// rides the same refresh() moments as the rest.
     @Published private(set) var camera: CameraPermissionState = .unknown
-    @Published private(set) var calendarAccess = EKEventStore.authorizationStatus(for: .event)
+    @Published private(set) var calendarAccess: EKAuthorizationStatus = AppFeature.notchCalendar.isAvailable
+        ? EKEventStore.authorizationStatus(for: .event) : .notDetermined
     @Published private(set) var requestingCalendar = false
     @Published private(set) var calendarRequestFailed = false
     private var calendarPermissionResolution: TimeInterval?
@@ -135,7 +136,8 @@ final class Permissions: ObservableObject {
         refreshActivePermissions()
         refreshNotificationPermission()
         refreshCameraPermission()
-        calendarAccess = EKEventStore.authorizationStatus(for: .event)
+        calendarAccess = AppFeature.notchCalendar.isAvailable
+            ? EKEventStore.authorizationStatus(for: .event) : .notDetermined
         refreshMicrophonePermission()
         // Checking Full Disk Access means asking the system about protected
         // folders, and every refused answer costs time. Doing that where the

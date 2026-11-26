@@ -513,7 +513,11 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
     }
 
     private var missionControlCheckInterval: TimeInterval {
+        #if VORSSAINT_INTEL
+        overviewWasVisible || concealedForMissionControl ? 0.08 : 1.5
+        #else
         overviewWasVisible || concealedForMissionControl ? 0.08 : 0.25
+        #endif
     }
 
     private func updateMissionControlTimer() {

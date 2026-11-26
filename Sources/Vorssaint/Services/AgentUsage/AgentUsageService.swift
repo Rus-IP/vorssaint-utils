@@ -36,7 +36,11 @@ final class AgentUsageService: ObservableObject {
     /// File events report a written file only once it closes, and some
     /// agents keep their log open for the whole session: logs written in the
     /// last half hour, or holding a turn, are checked this often instead.
+    #if VORSSAINT_INTEL
+    private static let poll: TimeInterval = 5
+    #else
     private static let poll: TimeInterval = 2
+    #endif
     private static let pollWindow: TimeInterval = 30 * 60
     /// Coalesce a live log's bursts into one history and display update.
     private static let publishDelay: TimeInterval = 1
@@ -65,8 +69,8 @@ final class AgentUsageService: ObservableObject {
     private lazy var codexLimitPoller = AgentCodexLimitPoller {
         AgentCodexResetService.shared.refresh()
     }
-    /// Claude Code is asked once a minute too, with the AI page closed.
-    private lazy var claudeLimitPoller = AgentCodexLimitPoller { [weak self] in
+    /// Claude Code is asked in the background too, with the AI page closed.
+    private lazy var claudeLimitPoller = AgentCodexLimitPoller(interval: AgentClaudeServer.backgroundFreshness) { [weak self] in
         self?.refreshClaudeLimits()
     }
     private var providers: [AgentProvider] = []
